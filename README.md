@@ -25,7 +25,7 @@ The purpose of this dataset is to develop a “mask” of the area along tidal a
     - lotic_path = f”{input_folder}/LOTIC_FILE_NAME.shp”
     - FACET_path = f”{input_folder}/FACET_FILE_NAME.shp”
     - extent = f”{input_folder}/environment/EXTENT_FILE_NAME”
-    - if you want to run the full extent, extent = “”
+      - if you want to run the full extent, extent = “”
 2. Save the Script
 3. Open the Python Command Prompt and enter: python /path/to_script/run_riparian.py
 
