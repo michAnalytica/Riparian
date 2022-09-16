@@ -9,8 +9,9 @@ The purpose of this dataset is to develop a “mask” of the area along tidal a
   - **data**
     - **input**
       - VIMS Chesapeake Bay Shoreline
+      - DE Bay Shoreline (derived from 1m CBP LULC 2017/18)
       - FACET (NHD 100k Aligned)
-      - Lotic Water (1m CBP LULC 2017/18)
+      - Lotic Water and Lakes/Reservoirs (1m CBP LULC 2017/18)
       - **environment**
         - Phase6_Snap.tif
         - Optional: Extent mask
@@ -24,22 +25,24 @@ The purpose of this dataset is to develop a “mask” of the area along tidal a
     - vims_path = f”{input_folder}/VIMS_FILE_NAME.shp”
     - lotic_path = f”{input_folder}/LOTIC_FILE_NAME.shp”
     - FACET_path = f”{input_folder}/FACET_FILE_NAME.shp”
+    - DE_path = f”{input_folder}/DE_SHORELINE_FILE_NAME.shp”
     - extent = f”{input_folder}/environment/EXTENT_FILE_NAME”
       - if you want to run the full extent, extent = “”
 2. Save the Script
 3. Open the Python Command Prompt and enter: python /path/to_script/run_riparian.py
 
 ## Methods
-### VIMS Shoreline
-1. Buffer VIMS shoreline by 30-meters
-2. Erase shoreline from buffered shoreline
+### Shoreline
+1. Merge VIMS Chesapeake Bay Shoreline and DE Bay Shoreline
+2. Buffer shoreline by 30-meters
+3. Erase shoreline from buffered shoreline
     - **Results are part of the final riparian layer**
 ### High-Resolution Land Use/Land Cover (LULC) Water Classes
 1. The lotic water class, where segments are at least 25 acres, and the Lakes and Reservoirs class are buffered by 30-meters
 2. The lotic water and lakes are reservoirs are erased from the buffered results
     - **Results are part of the final riparian layer**
 ### FACET Aligned 1:100k Stream Network
-1. Erase the buffered VIMS shoreline and LULC water classes from FACET
+1. Erase the buffered shoreline and LULC water classes from FACET
 2. Create a buffer field for remaining FACET streams calculated as: 1/2 of FACET estimated channel width plus 30-meter buffers
 3. Buffer FACET streams using buffer field from step 2
     - **Results are part of the final riparian layer**
