@@ -6,10 +6,11 @@ Author: Sarah McDonald, Geographer, USGS: Lower Mississippi-Gulf Water Science C
 Contact: smcdonald@chesapeakebay.net
          rthompso@chesapeakebay.net
 Description: This script creates a 10-meter, binary, riparian mask for the specified extent. The riparian zone
-             is delineated from three base datasets:
+             is delineated from four base datasets:
                 1. VIMS shoreline
-                2. FACET aligned 1:100k NHDPlusV2.1 Flowlines
-                3. CBP 1-meter resolution land use, lotic water class
+                2. DE Bay Shoreline from CBP 1-meter LULC
+                3. FACET aligned 1:100k NHDPlusV2.1 Flowlines
+                4. CBP 1-meter resolution land use, lotic water class
             The riparian zone is a 30-meter buffer from the estimated banks of streams, rivers, and other flowing
             water. The mask includes the estimated channels and lotic water, but not the Chesapeake Bay.
 How to Run: 1. The user must create the expected folder structure containing the required datasets. The required datasets
@@ -20,6 +21,7 @@ How to Run: 1. The user must create the expected folder structure containing the
                    - data
                        - input
                            VIMS_shoreline
+                           DE shoreline
                            FACET
                            Lotic Water
                            - environment
@@ -40,79 +42,85 @@ import arcpy
 import datetime
 import os
 from sys import argv
+from timeit import default_timer as timer
 
-def VIMS(vims_path, FACET_path):
+def shoreline(vims_path, DE_path, FACET_path):
     """
-    Method: VIMS()
-    Purpose: Create riparian zone for VIMS and remove buffered shoreline from FACET.
+    Method: shoreline()
+    Purpose: Create riparian zone for shoreline and remove buffered shoreline from FACET.
     Params: vims_path - path to VIMS shoreline
+            DE_path - path to DE Bay shoreline
             FACET_path - path to original FACET layer
-    Returns: vims_riparian - layer name for shoreline riparian area
+    Returns: shoreline_riparian - layer name for shoreline riparian area
              facet_erase - layer name for facet with shoreline erased
     """
     # intermediate file names
-    buffer = 'VIMS_buffer'
-    vims_riparian = 'VIMS_riparian'
-    facet_erase = 'FACET_VIMS_erase'
+    buffer = 'shoreline_buffer'
+    shoreline = 'shoreline'
+    shoreline_riparian = 'shoreline_riparian'
+    facet_erase = 'FACET_shoreline_erase'
 
-    # 1. buffer shoreline
-    arcpy.analysis.PairwiseBuffer(in_features=vims_path, out_feature_class=buffer, buffer_distance_or_field="30 Meters", dissolve_option="ALL", dissolve_field=[], method="GEODESIC", max_deviation="0 Meters")
+    # 1. merge shoreline layers
+    arcpy.management.Merge(inputs=[vims_path, DE_path], output=shoreline)
 
-    # 2. erase shoreline from buffer
-    arcpy.analysis.PairwiseErase(in_features=buffer, erase_features=vims_path, out_feature_class=vims_riparian, cluster_tolerance="")
+    # 2. buffer shoreline
+    arcpy.analysis.PairwiseBuffer(in_features=shoreline, out_feature_class=buffer, buffer_distance_or_field="30 Meters", dissolve_option="ALL", dissolve_field=[], method="GEODESIC", max_deviation="0 Meters")
 
-    # 3. Erase buffered shoreline from FACET
+    # 3. erase shoreline from buffer
+    arcpy.analysis.PairwiseErase(in_features=buffer, erase_features=shoreline, out_feature_class=shoreline_riparian, cluster_tolerance="")
+
+    # 4. Erase buffered shoreline from FACET
     arcpy.analysis.PairwiseErase(in_features=FACET_path, erase_features=buffer, out_feature_class=facet_erase, cluster_tolerance="")
 
     # return layer names of vims riparian and updated facet
-    return vims_riparian, facet_erase
+    return shoreline_riparian, facet_erase
 
-def lotic(lotic_path, FACET_VIMS_erase):
+def lotic(lotic_path, FACET_shoreline_erase):
     """
     Method: lotic()
     Purpose: Create riparian zones for lotic water and remove lotic from FACET.
     Params: lotic_path - path to lotic water
-            FACET_VIMS_erase - layer name for intermediate file with VIMS erased from FACET
+            FACET_shoreline_erase - layer name for intermediate file with shoreline erased from FACET
     Returns: lotic_riparian - layer name of lotic riparian
-             FACET_VIMS_lotic_erase - layer name of FACET with VIMS and lotic erased
+             FACET_shoreline_lotic_erase - layer name of FACET with shoreline and lotic erased
     """
     # intermediate layer names
     lotic_buf = 'lotic_buffer'
     lotic_riparian = 'lotic_riparian'
-    FACET_VIMS_lotic_erase = "FACET_VIMS_lotic_erase"
+    FACET_shoreline_lotic_erase = "FACET_shoreline_lotic_erase"
 
     # 1. Buffer lotic water to create lotic riparian zone
     arcpy.analysis.PairwiseBuffer(in_features=lotic_path, out_feature_class=lotic_buf, buffer_distance_or_field="30 Meters", dissolve_option="ALL", dissolve_field=[], method="GEODESIC", max_deviation="0 Meters")
 
     # 2. Remove lotic water from FACET
-    arcpy.analysis.PairwiseErase(in_features=FACET_VIMS_erase, erase_features=lotic_path, out_feature_class=FACET_VIMS_lotic_erase, cluster_tolerance="")
+    arcpy.analysis.PairwiseErase(in_features=FACET_shoreline_erase, erase_features=lotic_path, out_feature_class=FACET_shoreline_lotic_erase, cluster_tolerance="")
 
     # 3. Remove lotic water from buffered lotic
     arcpy.analysis.PairwiseErase(in_features=lotic_buf, erase_features=lotic_path, out_feature_class=lotic_riparian, cluster_tolerance="")
 
     # 4. Return layer names for lotic riparian and FACET
-    return lotic_riparian, FACET_VIMS_lotic_erase
+    return lotic_riparian, FACET_shoreline_lotic_erase
 
-def FACET(FACET_VIMS_lotic_erase):
+def FACET(FACET_shoreline_lotic_erase):
     """
     Method: FACET()
     Purpose: Create FACET riparian area
-    Params: FACET_VIMS_lotic_erase - FACET layer to be buffered (FACET with VIMS and lotic erased)
+    Params: FACET_shoreline_lotic_erase - FACET layer to be buffered (FACET with shoreline and lotic erased)
     Returns: facet_riparian - layer name of facet riparian
     """
     # intermediate layer names
     facet_riparian = 'FACET_riparian'
 
     # 1. Create field representing the channel width plus 30-m buffer area
-    arcpy.management.CalculateField(in_table=FACET_VIMS_lotic_erase, field="Buffer", expression="(!chnwid_px!/2)+30", expression_type="PYTHON3", code_block="", field_type="TEXT", enforce_domains="NO_ENFORCE_DOMAINS")
+    arcpy.management.CalculateField(in_table=FACET_shoreline_lotic_erase, field="Buffer", expression="(!chnwid_px!/2)+30", expression_type="PYTHON3", code_block="", field_type="TEXT", enforce_domains="NO_ENFORCE_DOMAINS")
 
     # 2. Buffer FACET
-    arcpy.analysis.PairwiseBuffer(in_features=FACET_VIMS_lotic_erase, out_feature_class=facet_riparian, buffer_distance_or_field="Buffer", dissolve_option="ALL", dissolve_field=[], method="GEODESIC", max_deviation="0 Meters")
+    arcpy.analysis.PairwiseBuffer(in_features=FACET_shoreline_lotic_erase, out_feature_class=facet_riparian, buffer_distance_or_field="Buffer", dissolve_option="ALL", dissolve_field=[], method="GEODESIC", max_deviation="0 Meters")
 
     # 3. Return FACET riparian
     return facet_riparian
 
-def createRiparian(vims_path, lotic_path, FACET_path, snap_raster, output_folder, suffix):
+def createRiparian(vims_path, lotic_path, FACET_path, DE_path, snap_raster, output_folder, suffix):
     """
     Method: createRiparian()
     Purpose: Create 10-meter raster riparian zones.
@@ -125,21 +133,21 @@ def createRiparian(vims_path, lotic_path, FACET_path, snap_raster, output_folder
     rip_vector = 'riparian_vector'
     riparian_raster = f"{output_folder}/riparian_10m{suffix}.tif"
 
-    # 1. Create VIMS riparian
-    print(f"Creating VIMS riparian zone... {datetime.datetime.now()}")
-    vims_riparian, FACET_VIMS_erase = VIMS(vims_path, FACET_path)
+    # 1. Create shoreline riparian
+    print(f"Creating shoreline riparian zone... {datetime.datetime.now()}")
+    shoreline_riparian, FACET_shoreline_erase = shoreline(vims_path, DE_path, FACET_path)
 
     # 2. Create lotic riparian
     print(f"Creating lotic riparian zone...{datetime.datetime.now()}")
-    lotic_riparian, FACET_VIMS_lotic_erase = lotic(lotic_path, FACET_VIMS_erase)
+    lotic_riparian, FACET_shoreline_lotic_erase = lotic(lotic_path, FACET_shoreline_erase)
 
     # 3. Create FACET riparian
     print(f"Creating FACET riparian zone...{datetime.datetime.now()}")
-    facet_riparian = FACET(FACET_VIMS_lotic_erase)
+    facet_riparian = FACET(FACET_shoreline_lotic_erase)
 
     # 4. Merge the 3 riparian layers into a single feature layer
     print(f"Merging riparian zones...{datetime.datetime.now()}")
-    arcpy.management.Merge(inputs=[vims_riparian, lotic_riparian, facet_riparian], output=rip_vector)
+    arcpy.management.Merge(inputs=[shoreline_riparian, lotic_riparian, facet_riparian], output=rip_vector)
 
     # 5. Create field to rasterize on (all are 1)
     arcpy.management.CalculateField(in_table=rip_vector, field="Raster", expression="1", expression_type="PYTHON3", field_type="SHORT")
@@ -160,12 +168,13 @@ if __name__=="__main__":
     # file paths
     vims_path = f"{input_folder}/VIMSChesBayShoreline_albers.shp"
     lotic_path = f"{input_folder}/lotic_reservoirs_1m.shp"
+    DE_path = f"{input_folder}/DelawareAtlantic_1m_dis.shp"
     FACET_path = f"{input_folder}/FACET_NHD100k_aligned_w_gaps_filled_v1.shp"
     snap_raster = f"{input_folder}/environment/Phase6_Snap.tif"
     
     # optional user entry - path to extent mask
-    extent = f"{input_folder}/environment/patuxent.shp" # test in Patuxent
-    suffix = '_patuxent' # add to end of file names
+    extent = f"" # test in Patuxent
+    suffix = '_MDHWA' # add to end of file names
 
     # set environment workspace and extent
     arcpy.CreateFileGDB_management(output_folder, f"riparian_intermediates{suffix}.gdb")
@@ -174,4 +183,7 @@ if __name__=="__main__":
         arcpy.env.extent = extent
 
     # create riparian layer
-    createRiparian(vims_path, lotic_path, FACET_path, snap_raster, output_folder, suffix)
+    st = timer()
+    createRiparian(vims_path, lotic_path, FACET_path, DE_path, snap_raster, output_folder, suffix)
+    end = round((timer() - st)/60.0, 2)
+    print("Run time: {end} minutes")
