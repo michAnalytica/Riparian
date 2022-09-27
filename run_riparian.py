@@ -44,6 +44,12 @@ import os
 from sys import argv
 from timeit import default_timer as timer
 
+def time_dif(st_time):
+    cur = timer()
+    end = round((cur - st_time)/60.0, 2)
+    print(f"Run time: {end} minutes")
+    return cur
+
 def shoreline(vims_path, DE_path, FACET_path):
     """
     Method: shoreline()
@@ -111,7 +117,8 @@ def FACET(FACET_shoreline_lotic_erase):
     # intermediate layer names
     facet_riparian = 'FACET_riparian'
 
-    # 1. Create field representing the channel width plus 30-m buffer area
+    # # # 1. Create field representing the channel width plus 30-m buffer area
+    arcpy.AddField_management(FACET_shoreline_lotic_erase, 'Buffer', "DOUBLE" ) # need this to avoid database lock error ?
     arcpy.management.CalculateField(in_table=FACET_shoreline_lotic_erase, field="Buffer", expression="(!chnwid_px!/2)+30", expression_type="PYTHON3", code_block="", field_type="TEXT", enforce_domains="NO_ENFORCE_DOMAINS")
 
     # 2. Buffer FACET
@@ -133,21 +140,26 @@ def createRiparian(vims_path, lotic_path, FACET_path, DE_path, snap_raster, outp
     rip_vector = 'riparian_vector'
     riparian_raster = f"{output_folder}/riparian_10m{suffix}.tif"
 
+    st = timer()
     # 1. Create shoreline riparian
     print(f"Creating shoreline riparian zone... {datetime.datetime.now()}")
     shoreline_riparian, FACET_shoreline_erase = shoreline(vims_path, DE_path, FACET_path)
+    st = time_dif(st)
 
     # 2. Create lotic riparian
     print(f"Creating lotic riparian zone...{datetime.datetime.now()}")
     lotic_riparian, FACET_shoreline_lotic_erase = lotic(lotic_path, FACET_shoreline_erase)
+    st = time_dif(st)
 
     # 3. Create FACET riparian
     print(f"Creating FACET riparian zone...{datetime.datetime.now()}")
     facet_riparian = FACET(FACET_shoreline_lotic_erase)
+    st = time_dif(st)
 
     # 4. Merge the 3 riparian layers into a single feature layer
     print(f"Merging riparian zones...{datetime.datetime.now()}")
     arcpy.management.Merge(inputs=[shoreline_riparian, lotic_riparian, facet_riparian], output=rip_vector)
+    st = time_dif(st)
 
     # 5. Create field to rasterize on (all are 1)
     arcpy.management.CalculateField(in_table=rip_vector, field="Raster", expression="1", expression_type="PYTHON3", field_type="SHORT")
@@ -157,27 +169,32 @@ def createRiparian(vims_path, lotic_path, FACET_path, DE_path, snap_raster, outp
     arcpy.env.snapRaster = snap_raster
     arcpy.env.compression = "LZW"
     arcpy.PolygonToRaster_conversion(rip_vector, "Raster", riparian_raster, cellsize=snap_raster)
+    st = time_dif(st)
 
 
 if __name__=="__main__":
     # folder paths
-    folder = r'C:/Users/smcdonald/Documents/Data/Riparian' # User updates this line - pass this as argument?
+    folder = r'C:/Users/smcdonald/Documents/MDHWA/riparian' # User updates this line - pass this as argument?
     input_folder = f"{folder}/data/input"
     output_folder = f"{folder}/data/output"
 
     # file paths
     vims_path = f"{input_folder}/VIMSChesBayShoreline_albers.shp"
     lotic_path = f"{input_folder}/lotic_reservoirs_1m.shp"
-    DE_path = f"{input_folder}/DelawareAtlantic_1m_dis.shp"
+    DE_path = f"{input_folder}/DE-shoreline_LULC-NOAASLR0ft_albers.shp"
     FACET_path = f"{input_folder}/FACET_NHD100k_aligned_w_gaps_filled_v1.shp"
     snap_raster = f"{input_folder}/environment/Phase6_Snap.tif"
     
     # optional user entry - path to extent mask
-    extent = f"" # test in Patuxent
+    extent = f"{input_folder}/environment/MDHWA_catchments_30m_albers.tif" # test in Patuxent
     suffix = '_MDHWA' # add to end of file names
 
     # set environment workspace and extent
-    arcpy.CreateFileGDB_management(output_folder, f"riparian_intermediates{suffix}.gdb")
+    try:
+        arcpy.CreateFileGDB_management(output_folder, f"riparian_intermediates{suffix}.gdb")
+    except:
+        print("WARNING: Geodatabase already exists. Overwriting contents.")
+        arcpy.env.overwriteOutput = True
     arcpy.env.workspace = f"{output_folder}/riparian_intermediates{suffix}.gdb"
     if os.path.isfile(extent):
         arcpy.env.extent = extent
@@ -185,5 +202,4 @@ if __name__=="__main__":
     # create riparian layer
     st = timer()
     createRiparian(vims_path, lotic_path, FACET_path, DE_path, snap_raster, output_folder, suffix)
-    end = round((timer() - st)/60.0, 2)
-    print("Run time: {end} minutes")
+    time_dif(st)
