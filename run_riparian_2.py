@@ -5,6 +5,8 @@ Author: Sarah McDonald, Geographer, USGS: Lower Mississippi-Gulf Water Science C
             Andy Fitch, and Sarah McDonald. 
 Contact: smcdonald@chesapeakebay.net
          rthompso@chesapeakebay.net
+Update: 
+              - Buffer method updated from GEODESIC to PLANAR
 Description: This script creates a 10-meter, binary, riparian mask for the specified extent. The riparian zone
              is delineated from four base datasets:
                 1. VIMS shoreline
