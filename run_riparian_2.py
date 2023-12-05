@@ -94,7 +94,7 @@ def shoreline(vims_path, DE_path, FACET_data, huc_mask, buffer_width):
 
     # 2. buffer shoreline
     if not arcpy.Exists(f"{arcpy.env.workspace}/{buffer}"):
-        arcpy.analysis.PairwiseBuffer(in_features=shoreline, out_feature_class=buffer, buffer_distance_or_field=f"{buffer_width} Meters", dissolve_option="ALL", dissolve_field=[], method="GEODESIC", max_deviation="0 Meters")
+        arcpy.analysis.PairwiseBuffer(in_features=shoreline, out_feature_class=buffer, buffer_distance_or_field=f"{buffer_width} Meters", dissolve_option="ALL", dissolve_field=[], method="PLANAR", max_deviation="0 Meters")
 
     # 3. erase shoreline from buffer
     if not arcpy.Exists(f"{arcpy.env.workspace}/{shoreline_riparian}"):
@@ -126,7 +126,7 @@ def lotic(lotic_path, FACET_shoreline_erase, buffer_width):
     if cnt > 0:
         # 1. Buffer lotic water to create lotic riparian zone
         if not arcpy.Exists(f"{arcpy.env.workspace}/{lotic_buf}"):
-            arcpy.analysis.PairwiseBuffer(in_features=lotic_path, out_feature_class=lotic_buf, buffer_distance_or_field=f"{buffer_width} Meters", dissolve_option="ALL", dissolve_field=[], method="GEODESIC", max_deviation="0 Meters")
+            arcpy.analysis.PairwiseBuffer(in_features=lotic_path, out_feature_class=lotic_buf, buffer_distance_or_field=f"{buffer_width} Meters", dissolve_option="ALL", dissolve_field=[], method="PLANAR", max_deviation="0 Meters")
 
         # 2. Remove lotic water from FACET
         if not arcpy.Exists(f"{arcpy.env.workspace}/{FACET_shoreline_lotic_erase}"):
@@ -163,7 +163,7 @@ def FACET(FACET_shoreline_lotic_erase, buffer_width):
         arcpy.management.CalculateField(in_table=FACET_shoreline_lotic_erase, field="Buffer", expression=f"(!chnwid_px!/2)+{buffer_width}", expression_type="PYTHON3", code_block="", field_type="TEXT", enforce_domains="NO_ENFORCE_DOMAINS")
 
         # 2. Buffer FACET
-        arcpy.analysis.PairwiseBuffer(in_features=FACET_shoreline_lotic_erase, out_feature_class=facet_riparian, buffer_distance_or_field="Buffer", dissolve_option="ALL", dissolve_field=[], method="GEODESIC", max_deviation="0 Meters")
+        arcpy.analysis.PairwiseBuffer(in_features=FACET_shoreline_lotic_erase, out_feature_class=facet_riparian, buffer_distance_or_field="Buffer", dissolve_option="ALL", dissolve_field=[], method="PLANAR", max_deviation="0 Meters")
 
     # 3. Return FACET riparian
     return facet_riparian
